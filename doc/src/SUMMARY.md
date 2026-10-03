@@ -5,6 +5,7 @@
   - [Configuration options](./options.md)
   - [Network interfaces](./interfaces.md)
   - [Shared directories](./shares.md)
+  - [Persistent overlay store](./overlay-store.md)
   - [Device pass-through](./devices.md)
   - [CPU emulation](./cpu-emulation.md)
   - [Output options](./output-options.md)

@@ -24,6 +24,7 @@ in
     ./ssh-deploy.nix
     ./vsock-ssh.nix
     ./instance.nix
+    ./overlay-store.nix
   ];
 
   config = {
