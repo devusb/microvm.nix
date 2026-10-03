@@ -23,10 +23,8 @@ let
 
   macvtapInterfaces = interfacesByType "macvtap";
 
-  tapFlags = lib.concatStringsSep " " (
-    [ "vnet_hdr" ] ++
-    lib.optional config.microvm.declaredRunner.passthru.tapMultiQueue "multi_queue"
-  );
+  tapFlags = "vnet_hdr" + lib.optionalString config.microvm.declaredRunner.passthru.tapMultiQueue
+    " $( [ \"\${MICROVM_VCPU:-${toString config.microvm.vcpu}}\" -gt 1 ] && echo multi_queue )";
 
   # TODO: don't hardcode but obtain from host config
   user = "microvm";

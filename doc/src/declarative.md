@@ -94,7 +94,9 @@ On every host switch, `install-microvm-template-<template>.service`:
   template,
 - restarts booted instances whose runner changed, unless
   `restartIfChanged = false`,
-- starts instances that were never booted, unless `autostart = false`.
+- starts instances that are not running, at boot and on every switch that
+  changes the template, unless `autostart = false`. An instance stopped by
+  hand starts again on the next such switch.
 
 A switch that does not change the template restarts nothing.
 

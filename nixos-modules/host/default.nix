@@ -52,7 +52,7 @@ let
           ln -sTf ${runner} "$dir/current"
           chown -h ${user}:${group} "$dir/current"
 
-          if [ -L "$dir/booted" ]; then
+          if ${systemctl} is-active -q "microvm@$instance.service"; then
             ${lib.optionalString templateConfig.restartIfChanged ''
               if [ "$(readlink "$dir/booted")" != ${runner} ]; then
                 ${systemctl} restart --no-block "microvm@$instance.service"

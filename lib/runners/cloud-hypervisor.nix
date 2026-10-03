@@ -104,7 +104,7 @@ let
 
   # Multi-queue options
   mqOps = lib.optionalAttrs tapMultiQueue {
-    num_queues = toString vcpu;
+    num_queues = "@MICROVM_VCPU@";
   };
 
   # cloud-hypervisor >= 30.0 < 36.0 temporarily replaced clap with argh
@@ -159,6 +159,7 @@ in {
   preStart = ''
     ${microvmConfig.preStart}
     MICROVM_CMDLINE=
+    MICROVM_NUM_QUEUES=$((2 * MICROVM_VCPU))
     MICROVM_PLATFORM=${lib.escapeShellArg platformOps}
     if [ -n "''${MICROVM_UUID:-}" ]; then
       MICROVM_PLATFORM="uuid=$MICROVM_UUID''${MICROVM_PLATFORM:+,$MICROVM_PLATFORM}"
@@ -207,8 +208,8 @@ in {
 
   command = let
     lateBind = builtins.replaceStrings
-    ([ "@MICROVM_MEM@" "@MICROVM_VCPU@" "@MICROVM_PLATFORM@" "@MICROVM_CMDLINE@" ] ++ lib.concatLists (lib.imap0 (index: _: [ "@MICROVM_TAP_${toString index}@" "@MICROVM_MAC_${toString index}@" ]) interfaces))
-    ([ "'\"$MICROVM_MEM\"'" "'\"$MICROVM_VCPU\"'" "\"$MICROVM_PLATFORM\"" "'\"$MICROVM_CMDLINE\"'" ] ++ lib.concatLists (lib.imap0 (index: _: [ "'\"$MICROVM_TAP_${toString index}\"'" "'\"$MICROVM_MAC_${toString index}\"'" ]) interfaces));
+    ([ "@MICROVM_MEM@" "@MICROVM_VCPU@" "@MICROVM_PLATFORM@" "@MICROVM_CMDLINE@" "@MICROVM_NUM_QUEUES@" ] ++ lib.concatLists (lib.imap0 (index: _: [ "@MICROVM_TAP_${toString index}@" "@MICROVM_MAC_${toString index}@" ]) interfaces))
+    ([ "'\"$MICROVM_MEM\"'" "'\"$MICROVM_VCPU\"'" "\"$MICROVM_PLATFORM\"" "'\"$MICROVM_CMDLINE\"'" "'\"$MICROVM_NUM_QUEUES\"'" ] ++ lib.concatLists (lib.imap0 (index: _: [ "'\"$MICROVM_TAP_${toString index}\"'" "'\"$MICROVM_MAC_${toString index}\"'" ]) interfaces));
   in lateBind (
     if user != null
     then throw "cloud-hypervisor will not change user"
@@ -287,14 +288,14 @@ in {
           tap = "@MICROVM_TAP_${toString index}@";
           mac = "@MICROVM_MAC_${toString index}@";
         } // lib.optionalAttrs tapMultiQueue {
-          num_queues = toString (2 * vcpu);
+          num_queues = "@MICROVM_NUM_QUEUES@";
         })
         else if type == "macvtap"
         then opsMapped ({
           fd = "[${lib.concatMapStringsSep "," toString macvtapFds.${id}}]";
           inherit mac;
         } // lib.optionalAttrs tapMultiQueue {
-          num_queues = toString (2 * vcpu);
+          num_queues = "@MICROVM_NUM_QUEUES@";
         })
         else throw "Unsupported interface type ${type} for Cloud-Hypervisor"
       ) interfaces)

@@ -58,7 +58,7 @@ let
           microvm.templates.tmpl.config = {
             microvm = {
               hypervisor = "cloud-hypervisor";
-              vcpu = 1;
+              vcpu = 2;
               mem = 512;
               socket = "control.socket";
               instance.enable = true;
@@ -172,6 +172,11 @@ in
     ssh("inst1", "findmnt -n -o SOURCE /home | grep -q /dev/vd")
     assert ssh("inst1", "cat /etc/machine-id") != ssh("inst2", "cat /etc/machine-id"), "instances share a machine-id"
     assert guest_ip("inst1") != guest_ip("inst2"), "instances share a DHCP lease"
+
+    create("inst3", "-v 1")
+    host.succeed("systemctl start microvm@inst3.service")
+    wait_ssh("inst3")
+    assert ssh("inst3", "nproc").strip() == "1"
   '';
 
   instances-restart = mkTest "instances-restart" /* python */ ''
@@ -204,5 +209,10 @@ in
 
     create("inst3")
     host.succeed("test \"$(readlink /var/lib/microvms/inst3/current)\" = \"$(readlink /var/lib/microvms/.templates/tmpl/current)\"")
+
+    host.succeed("systemctl stop microvm@inst1.service")
+    host.succeed("ln -sfn \"$(readlink /var/lib/microvms/inst1/current)\" /var/lib/microvms/inst1/booted")
+    host.succeed("systemctl restart install-microvm-template-tmpl.service")
+    host.wait_for_unit("microvm@inst1.service")
   '';
 }

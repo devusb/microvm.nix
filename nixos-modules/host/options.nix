@@ -190,7 +190,7 @@ in
       type = with types; attrsOf (submodule ({ config, name, ... }: {
         options = evalOptions "templates" { inherit config name; } // {
           autostart = mkOption {
-            description = "Start instances of this template that have not been booted yet.";
+            description = "Start every stopped instance of this template whenever the template is installed, at boot and on host switches.";
             type = bool;
             default = true;
           };
