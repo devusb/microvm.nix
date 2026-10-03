@@ -56,6 +56,7 @@
             hypervisor = "cloud-hypervisor";
             vcpu = 1;
             mem = 512;
+            socket = "control.socket";
             interfaces = [
               {
                 type = "tap";
@@ -91,14 +92,16 @@
           system.stateVersion = lib.trivial.release;
         };
 
-        specialisation.v2.configuration.microvm.templates.tmpl.config.environment.etc."base-version".text =
-          "2";
+        specialisation.v2.configuration.microvm.templates.tmpl.config = {
+          environment.etc."base-version".text = "2";
+          microvm.mem = lib.mkForce 640;
+        };
       };
 
       testScript = /* python */ ''
         host.wait_for_unit("multi-user.target")
         host.succeed("test -L /var/lib/microvms/.templates/tmpl/current")
-        host.succeed("mkdir -p /var/lib/microvms/pre && echo tmpl > /var/lib/microvms/pre/template && chown -R microvm:kvm /var/lib/microvms/pre")
+        host.succeed("mkdir -p /var/lib/microvms/pre/instance && echo tmpl > /var/lib/microvms/pre/template && chown -R microvm:kvm /var/lib/microvms/pre")
         host.succeed("systemctl restart install-microvm-template-tmpl.service")
         host.succeed("test -L /var/lib/microvms/pre/current")
         old = host.succeed("readlink /var/lib/microvms/.templates/tmpl/current").strip()
@@ -106,6 +109,7 @@
         new = host.succeed("readlink /var/lib/microvms/.templates/tmpl/current").strip()
         assert old != new, "template runner did not change"
         assert host.succeed("readlink /var/lib/microvms/pre/current").strip() == new
+        host.succeed("/run/booted-system/bin/switch-to-configuration test")
 
         host.succeed("microvm -c inst1 -t tmpl")
         host.succeed("test -f /var/lib/microvms/inst1/template && grep -qx tmpl /var/lib/microvms/inst1/template")
@@ -135,7 +139,7 @@
         host.succeed("pgrep -f 'cloud-hypervisor.*boot=2' >/dev/null")
 
         def guest_ip(name):
-            return host.succeed(f"awk '$4==\"{name}\"{{print $3}}' /var/lib/dnsmasq/dnsmasq.leases").strip()
+            return host.succeed(f"awk '$4==\"{name}\"{{print $3}}' /var/lib/dnsmasq/dnsmasq.leases | tail -1").strip()
 
         def ssh(name, cmd):
             return host.succeed(f"sshpass -p test ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{guest_ip(name)} {cmd}")
@@ -148,6 +152,27 @@
         assert ssh("inst1", "hostname").strip() == "inst1"
         ssh("inst1", "findmnt /run/microvm/instance")
         ssh("inst1", "findmnt -n -o SOURCE /home | grep -q /dev/vd")
+
+        ssh("inst1", "'echo keep > /home/keep'")
+        def started(name):
+            return host.succeed(f"systemctl show -p ActiveEnterTimestampMonotonic microvm@{name}.service").strip()
+        t1_before = started("inst1")
+        t2_before = started("inst2")
+        host.succeed("/run/current-system/bin/switch-to-configuration test")
+        assert started("inst1") == t1_before, "no-op switch restarted inst1"
+        assert started("inst2") == t2_before, "no-op switch restarted inst2"
+        host.succeed("/run/booted-system/specialisation/v2/bin/switch-to-configuration test")
+        host.wait_until_succeeds(f"[ \"$(systemctl show -p ActiveEnterTimestampMonotonic microvm@inst1.service)\" != '{t1_before}' ]", timeout=300)
+        host.wait_until_succeeds(f"[ \"$(systemctl show -p ActiveEnterTimestampMonotonic microvm@inst2.service)\" != '{t2_before}' ]", timeout=300)
+        host.wait_for_unit("microvm@inst1.service")
+        host.wait_until_succeeds("grep -q ' inst1 ' /var/lib/dnsmasq/dnsmasq.leases", timeout=180)
+        host.wait_until_succeeds(f"sshpass -p test ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{guest_ip('inst1')} true", timeout=180)
+        assert ssh("inst1", "cat /etc/base-version").strip() == "2"
+        assert ssh("inst1", "cat /home/keep").strip() == "keep"
+        host.succeed("pgrep -af cloud-hypervisor | grep -q 'size=640M'")
+        host.succeed("pgrep -af cloud-hypervisor | grep -q 'size=768M'")
+        host.succeed("microvm -c inst3 -t tmpl")
+        host.succeed("test \"$(readlink /var/lib/microvms/inst3/current)\" = \"$(readlink /var/lib/microvms/.templates/tmpl/current)\"")
       '';
 
       meta.timeout = 1800;
