@@ -7,7 +7,7 @@
 
 {
   instances = import (nixpkgs + "/nixos/tests/make-test-python.nix") (
-    { lib, ... }:
+    { lib, pkgs, ... }:
     {
       name = "instances";
 
@@ -23,6 +23,34 @@
         virtualisation.diskSize = 8192;
         virtualisation.memorySize = 4096;
 
+        environment.systemPackages = [ pkgs.sshpass ];
+        networking.firewall.trustedInterfaces = [ "vmbr0" ];
+        systemd.network = {
+          enable = true;
+          netdevs."10-vmbr0".netdevConfig = {
+            Name = "vmbr0";
+            Kind = "bridge";
+          };
+          networks."10-vmbr0" = {
+            matchConfig.Name = "vmbr0";
+            address = [ "10.100.0.1/24" ];
+            networkConfig.ConfigureWithoutCarrier = true;
+          };
+          networks."11-mvm" = {
+            matchConfig.Name = "mvm-*";
+            networkConfig.Bridge = "vmbr0";
+          };
+        };
+        services.dnsmasq = {
+          enable = true;
+          resolveLocalQueries = false;
+          settings = {
+            interface = "vmbr0";
+            bind-dynamic = true;
+            dhcp-range = "10.100.0.10,10.100.0.250,12h";
+          };
+        };
+
         microvm.templates.tmpl.config = {
           microvm = {
             hypervisor = "cloud-hypervisor";
@@ -35,6 +63,13 @@
                 mac = "02:00:00:00:00:00";
               }
             ];
+            volumes = [
+              {
+                image = "home.img";
+                mountPoint = "/home";
+                size = 256;
+              }
+            ];
             shares = [
               {
                 proto = "virtiofs";
@@ -45,7 +80,14 @@
               }
             ];
           };
+          microvm.instance.enable = true;
           networking.hostName = "tmpl";
+          networking.useNetworkd = true;
+          networking.useDHCP = true;
+          networking.usePredictableInterfaceNames = false;
+          services.openssh.enable = true;
+          services.openssh.settings.PermitRootLogin = "yes";
+          users.users.root.password = "test";
           system.stateVersion = lib.trivial.release;
         };
 
@@ -91,6 +133,21 @@
         host.succeed(f"ip link show {tap1}")
         host.succeed(f"ip link show {tap2}")
         host.succeed("pgrep -f 'cloud-hypervisor.*boot=2' >/dev/null")
+
+        def guest_ip(name):
+            return host.succeed(f"awk '$4==\"{name}\"{{print $3}}' /var/lib/dnsmasq/dnsmasq.leases").strip()
+
+        def ssh(name, cmd):
+            return host.succeed(f"sshpass -p test ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{guest_ip(name)} {cmd}")
+
+        host.succeed("echo inst1 > /var/lib/microvms/inst1/instance/hostname")
+        host.succeed("systemctl restart microvm@inst1.service")
+        host.wait_for_unit("microvm@inst1.service")
+        host.wait_until_succeeds("grep -q ' inst1 ' /var/lib/dnsmasq/dnsmasq.leases", timeout=180)
+        host.wait_until_succeeds(f"sshpass -p test ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{guest_ip('inst1')} true", timeout=180)
+        assert ssh("inst1", "hostname").strip() == "inst1"
+        ssh("inst1", "findmnt /run/microvm/instance")
+        ssh("inst1", "findmnt -n -o SOURCE /home | grep -q /dev/vd")
       '';
 
       meta.timeout = 1800;

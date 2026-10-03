@@ -71,3 +71,37 @@ microvm.vms = {
 
 Note that building MicroVMs with the host increases build time and
 closure size of the host's system.
+
+## Templates and instances
+
+A template is a MicroVM configuration declared once on the host. It is
+built into one runner that any number of instances share.
+
+```nix
+microvm.templates.workstation.config = {
+  microvm.instance.enable = true;
+  # ...
+};
+```
+
+The host keeps the template runner at
+`/var/lib/microvms/.templates/<template>/current`. Instances are created
+imperatively with `microvm -c <name> -t <template>`.
+
+On every host switch, `install-microvm-template-<template>.service`:
+
+- relinks `current` of every instance whose `template` file names the
+  template,
+- restarts booted instances whose runner changed, unless
+  `restartIfChanged = false`,
+- starts instances that were never booted, unless `autostart = false`.
+
+A switch that does not change the template restarts nothing.
+
+The runner reads `instance.env` from the instance directory at launch.
+Memory, vCPUs, tap names and MAC addresses in it override the
+template's values. The cloud-hypervisor runner supports this.
+
+With `microvm.instance.enable`, the instance's `instance/` directory is
+shared into the guest at `/run/microvm/instance`. A `hostname` file in
+it sets the guest's hostname at boot.
