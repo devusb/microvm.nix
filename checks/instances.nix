@@ -13,6 +13,7 @@
 
       nodes.host = {
         imports = [ self.nixosModules.host ];
+        microvm.host.startupTimeout = 30;
         systemd.enableStrictShellChecks = true;
 
         boot.kernelModules = [ "kvm" ];
@@ -84,8 +85,13 @@
           microvm.instance.enable = true;
           networking.hostName = "tmpl";
           networking.useNetworkd = true;
-          networking.useDHCP = true;
+          networking.useDHCP = false;
           networking.usePredictableInterfaceNames = false;
+          systemd.network.networks."10-eth0" = {
+            matchConfig.Name = "eth0";
+            networkConfig.DHCP = "ipv4";
+            dhcpV4Config.ClientIdentifier = "mac";
+          };
           services.openssh.enable = true;
           services.openssh.settings.PermitRootLogin = "yes";
           users.users.root.password = "test";
@@ -152,6 +158,14 @@
         assert ssh("inst1", "hostname").strip() == "inst1"
         ssh("inst1", "findmnt /run/microvm/instance")
         ssh("inst1", "findmnt -n -o SOURCE /home | grep -q /dev/vd")
+
+        host.succeed("grep -Eq '^MICROVM_UUID=[0-9a-f-]{36}$' /var/lib/microvms/inst1/instance.env")
+        host.succeed("echo inst2 > /var/lib/microvms/inst2/instance/hostname")
+        host.succeed("systemctl restart microvm@inst2.service")
+        host.wait_until_succeeds("grep -q ' inst2 ' /var/lib/dnsmasq/dnsmasq.leases", timeout=180)
+        host.wait_until_succeeds(f"sshpass -p test ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{guest_ip('inst2')} true", timeout=180)
+        assert ssh("inst1", "cat /etc/machine-id") != ssh("inst2", "cat /etc/machine-id"), "instances share a machine-id"
+        assert guest_ip("inst1") != guest_ip("inst2"), "instances share a DHCP lease"
 
         ssh("inst1", "'echo keep > /home/keep'")
         def started(name):

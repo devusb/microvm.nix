@@ -142,6 +142,7 @@ writeShellScriptBin "microvm" ''
         HASH=$(echo -n "$NAME" | sha256sum)
         {
           echo "MICROVM_HOSTNAME=$NAME"
+          echo "MICROVM_UUID=$(cat /proc/sys/kernel/random/uuid)"
           echo "MICROVM_TAP_0=mvm-''${HASH:0:8}"
           echo "MICROVM_MAC_0=02:''${HASH:0:2}:''${HASH:2:2}:''${HASH:4:2}:''${HASH:6:2}:''${HASH:8:2}"
           [ -n "$MEM" ] && echo "MICROVM_MEM=$MEM"

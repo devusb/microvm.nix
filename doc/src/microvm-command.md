@@ -58,6 +58,7 @@ The instance directory `/var/lib/microvms/<name>/` contains:
 | Key | Value |
 |---|---|
 | `MICROVM_HOSTNAME` | the instance name |
+| `MICROVM_UUID` | a random UUID, passed to the VM as its SMBIOS UUID so each instance gets its own machine-id |
 | `MICROVM_TAP_0` | `mvm-` followed by 8 hex digits derived from the name |
 | `MICROVM_MAC_0` | `02:` followed by 5 bytes derived from the name |
 | `MICROVM_MEM` | set by `-m` |

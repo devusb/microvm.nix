@@ -13,6 +13,7 @@
 
       nodes.host = {
         imports = [ self.nixosModules.host ];
+        microvm.host.startupTimeout = 30;
 
         boot.kernelModules = [ "kvm" ];
         virtualisation.qemu.options = [

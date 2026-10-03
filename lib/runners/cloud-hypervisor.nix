@@ -158,6 +158,12 @@ in {
 
   preStart = ''
     ${microvmConfig.preStart}
+    MICROVM_CMDLINE=
+    MICROVM_PLATFORM=${lib.escapeShellArg platformOps}
+    if [ -n "''${MICROVM_UUID:-}" ]; then
+      MICROVM_PLATFORM="uuid=$MICROVM_UUID''${MICROVM_PLATFORM:+,$MICROVM_PLATFORM}"
+      MICROVM_CMDLINE="systemd.machine_id=''${MICROVM_UUID//-/}"
+    fi
     ${lib.optionalString (socket != null) ''
       # workaround cloud-hypervisor sometimes
       # stumbling over a preexisting socket
@@ -201,8 +207,8 @@ in {
 
   command = let
     lateBind = builtins.replaceStrings
-    ([ "@MICROVM_MEM@" "@MICROVM_VCPU@" ] ++ lib.concatLists (lib.imap0 (index: _: [ "@MICROVM_TAP_${toString index}@" "@MICROVM_MAC_${toString index}@" ]) interfaces))
-    ([ "'\"$MICROVM_MEM\"'" "'\"$MICROVM_VCPU\"'" ] ++ lib.concatLists (lib.imap0 (index: _: [ "'\"$MICROVM_TAP_${toString index}\"'" "'\"$MICROVM_MAC_${toString index}\"'" ]) interfaces));
+    ([ "@MICROVM_MEM@" "@MICROVM_VCPU@" "@MICROVM_PLATFORM@" "@MICROVM_CMDLINE@" ] ++ lib.concatLists (lib.imap0 (index: _: [ "@MICROVM_TAP_${toString index}@" "@MICROVM_MAC_${toString index}@" ]) interfaces))
+    ([ "'\"$MICROVM_MEM\"'" "'\"$MICROVM_VCPU\"'" "\"$MICROVM_PLATFORM\"" "'\"$MICROVM_CMDLINE\"'" ] ++ lib.concatLists (lib.imap0 (index: _: [ "'\"$MICROVM_TAP_${toString index}\"'" "'\"$MICROVM_MAC_${toString index}\"'" ]) interfaces));
   in lateBind (
     if user != null
     then throw "cloud-hypervisor will not change user"
@@ -215,10 +221,10 @@ in {
         "--watchdog"
         "--kernel" kernelPath
         "--initramfs" initrdPath
-        "--cmdline" kernelCmdLine
+        "--cmdline" "${kernelCmdLine} @MICROVM_CMDLINE@"
         "--seccomp" "true"
         "--memory" memOps
-        "--platform" platformOps
+        "--platform" "@MICROVM_PLATFORM@"
       ]
       ++
       lib.optionals (!hasUserConsole) ["--console" "null"]
