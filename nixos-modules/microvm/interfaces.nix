@@ -6,6 +6,21 @@ let
       config.microvm.interfaces;
 
   tapInterfaces = interfacesByType "tap";
+
+  indexedTapInterfaces = builtins.filter ({ type, ... }: type == "tap") (
+    lib.imap0 (index: interface: interface // { inherit index; }) config.microvm.interfaces
+  );
+
+  sourceInstanceEnv = ''
+    if [ -f ./instance.env ]; then
+      set -a
+      . ./instance.env
+      set +a
+    fi
+  '';
+
+  tapName = { id, index, ... }: "\"\${MICROVM_TAP_${toString index}:-${id}}\"";
+
   macvtapInterfaces = interfacesByType "macvtap";
 
   tapFlags = lib.concatStringsSep " " (
@@ -22,20 +37,22 @@ in
     lib.mkIf (tapInterfaces != []) {
       tap-up = ''
         set -eou pipefail
-      '' + lib.concatMapStrings ({ id, ... }: ''
-        if [ -e /sys/class/net/${id} ]; then
-          ${lib.getExe' pkgs.iproute2 "ip"} link delete '${id}'
+        ${sourceInstanceEnv}
+      '' + lib.concatMapStrings (interface: ''
+        if [ -e /sys/class/net/${tapName interface} ]; then
+          ${lib.getExe' pkgs.iproute2 "ip"} link delete ${tapName interface}
         fi
 
-        ${lib.getExe' pkgs.iproute2 "ip"} tuntap add name '${id}' mode tap user '${user}' ${tapFlags}
-        ${lib.getExe' pkgs.iproute2 "ip"} link set '${id}' up
-      '') tapInterfaces;
+        ${lib.getExe' pkgs.iproute2 "ip"} tuntap add name ${tapName interface} mode tap user '${user}' ${tapFlags}
+        ${lib.getExe' pkgs.iproute2 "ip"} link set ${tapName interface} up
+      '') indexedTapInterfaces;
 
       tap-down = ''
         set -ou pipefail
-      '' + lib.concatMapStrings ({ id, ... }: ''
-        ${lib.getExe' pkgs.iproute2 "ip"} link delete '${id}'
-      '') tapInterfaces;
+        ${sourceInstanceEnv}
+      '' + lib.concatMapStrings (interface: ''
+        ${lib.getExe' pkgs.iproute2 "ip"} link delete ${tapName interface}
+      '') indexedTapInterfaces;
     }
   ) (
     lib.mkIf (macvtapInterfaces != []) {

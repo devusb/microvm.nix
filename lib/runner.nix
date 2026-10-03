@@ -168,11 +168,27 @@ let
     fi
   '';
 
+  instanceEnv = ''
+    export MICROVM_HOSTNAME=${lib.escapeShellArg hostName}
+    export MICROVM_VCPU=${toString microvmConfig.vcpu}
+    export MICROVM_MEM=${toString microvmConfig.mem}
+    ${lib.concatStrings (lib.imap0 (index: interface: ''
+      export MICROVM_TAP_${toString index}=${lib.escapeShellArg (interface.id or "")}
+      export MICROVM_MAC_${toString index}=${lib.escapeShellArg (interface.mac or "")}
+    '') microvmConfig.interfaces)}
+    if [ -f ./instance.env ]; then
+      set -a
+      . ./instance.env
+      set +a
+    fi
+  '';
+
   binScripts =
     microvmConfig.binScripts
     // {
       microvm-run = ''
         set -eou pipefail
+        ${instanceEnv}
         ${preStart}
         ${createVolumesScript microvmConfig.volumes}
         ${lib.optionalString (hypervisorConfig.requiresMacvtapAsFds or false) openMacvtapFds}

@@ -69,7 +69,7 @@ let
 
   # Attrs representing CHV mem options
   memOps = opsMapped ({
-    size = "${toString mem}M";
+    size = "@MICROVM_MEM@M";
     # Shared memory is required for usage with virtiofsd but it
     # prevents Kernel Same-page Merging.
     shared = if useVirtiofs || graphics.enable then "on" else "off";
@@ -150,7 +150,7 @@ let
     if userCpusBoot != null then
       throw "Cannot set `microvm.vcpu` and --cpus 'boot=${userCpusBoot}...' via `microvm.cloud-hypervisor.extraArgs` at the same time"
     else
-      lib.concatStringsSep "," ([ "boot=${toString vcpu}" ] ++ userCpusOpts);
+      lib.concatStringsSep "," ([ "boot=@MICROVM_VCPU@" ] ++ userCpusOpts);
 
   cloudhypervisorPkg = microvmConfig.cloud-hypervisor.package;
 in {
@@ -199,7 +199,11 @@ in {
   '';
 
 
-  command =
+  command = let
+    lateBind = builtins.replaceStrings
+    ([ "@MICROVM_MEM@" "@MICROVM_VCPU@" ] ++ lib.concatLists (lib.imap0 (index: _: [ "@MICROVM_TAP_${toString index}@" "@MICROVM_MAC_${toString index}@" ]) interfaces))
+    ([ "'\"$MICROVM_MEM\"'" "'\"$MICROVM_VCPU\"'" ] ++ lib.concatLists (lib.imap0 (index: _: [ "'\"$MICROVM_TAP_${toString index}\"'" "'\"$MICROVM_MAC_${toString index}\"'" ]) interfaces));
+  in lateBind (
     if user != null
     then throw "cloud-hypervisor will not change user"
     else if credentialFiles != {}
@@ -271,11 +275,11 @@ in {
       ++
       lib.optionals (socket != null) [ "--api-socket" socket ]
       ++
-      arg "--net" (map ({ type, id, mac, ... }:
+      arg "--net" (lib.imap0 (index: { type, id, mac, ... }:
         if type == "tap"
         then opsMapped ({
-          tap = id;
-          inherit mac;
+          tap = "@MICROVM_TAP_${toString index}@";
+          mac = "@MICROVM_MAC_${toString index}@";
         } // lib.optionalAttrs tapMultiQueue {
           num_queues = toString (2 * vcpu);
         })
@@ -297,7 +301,7 @@ in {
           usb = throw "USB passthrough is not supported on cloud-hypervisor";
         }.${bus}) devices
       )
-    ) + " " + lib.escapeShellArgs processedExtraArgs;
+    ) + " " + lib.escapeShellArgs processedExtraArgs);
 
   canShutdown = socket != null;
 

@@ -28,6 +28,13 @@
             hypervisor = "cloud-hypervisor";
             vcpu = 1;
             mem = 512;
+            interfaces = [
+              {
+                type = "tap";
+                id = "mvm-tmpl";
+                mac = "02:00:00:00:00:00";
+              }
+            ];
             shares = [
               {
                 proto = "virtiofs";
@@ -72,6 +79,18 @@
         assert tap1 != tap2
         host.succeed("microvm -l | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q 'inst1: template tmpl'")
         host.fail("microvm -c inst1 -t tmpl")
+
+        runner = host.succeed("readlink /var/lib/microvms/.templates/tmpl/current").strip()
+        host.succeed(f"grep -q MICROVM_VCPU {runner}/bin/microvm-run")
+        host.succeed(f"grep -q MICROVM_MEM {runner}/bin/microvm-run")
+        host.succeed("systemctl start microvm@inst1.service microvm@inst2.service")
+        host.wait_for_unit("microvm@inst1.service")
+        host.wait_for_unit("microvm@inst2.service")
+        tap1 = host.succeed("sed -n 's/^MICROVM_TAP_0=//p' /var/lib/microvms/inst1/instance.env").strip()
+        tap2 = host.succeed("sed -n 's/^MICROVM_TAP_0=//p' /var/lib/microvms/inst2/instance.env").strip()
+        host.succeed(f"ip link show {tap1}")
+        host.succeed(f"ip link show {tap2}")
+        host.succeed("pgrep -f 'cloud-hypervisor.*boot=2' >/dev/null")
       '';
 
       meta.timeout = 1800;
