@@ -18,8 +18,9 @@
         boot.kernelModules = [ "kvm" ];
         virtualisation.qemu.options = [
           "-cpu"
-          "kvm64,+svm,+vmx"
+          "host"
         ];
+        virtualisation.cores = 2;
         virtualisation.diskSize = 8192;
         virtualisation.memorySize = 4096;
 
@@ -97,6 +98,10 @@
             require-sigs = false;
             experimental-features = [ "nix-command" ];
           };
+          documentation.enable = false;
+          services.timesyncd.enable = false;
+          services.logrotate.enable = false;
+          services.fstrim.enable = false;
           system.stateVersion = lib.trivial.release;
         };
       };
@@ -158,7 +163,7 @@
             ssh("nix-store --verify")
       '';
 
-      meta.timeout = 1800;
+      meta.timeout = 1200;
     }
   ) {
     inherit system;
