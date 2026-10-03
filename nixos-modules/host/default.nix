@@ -11,6 +11,64 @@ let
   };
   user = "microvm";
   group = "kvm";
+  templateDir = name: "${stateDir}/.templates/${name}";
+
+  templateDirs = lib.optionalAttrs (config.microvm.templates != { }) {
+    "${stateDir}/.templates".d = {
+      inherit user group;
+      mode = "0775";
+    };
+  } // lib.mapAttrs' (name: _: lib.nameValuePair (templateDir name) {
+    d = {
+      inherit user group;
+      mode = "0775";
+    };
+  }) config.microvm.templates;
+
+  templateServices = lib.mapAttrs' (name: templateConfig:
+    let
+      runner = templateConfig.config.config.microvm.declaredRunner;
+      systemctl = lib.getExe' pkgs.systemd "systemctl";
+    in
+    lib.nameValuePair "install-microvm-template-${name}" {
+      description = "Install MicroVM template '${name}' and refresh its instances";
+      wantedBy = [ "microvms.target" ];
+      restartTriggers = [ runner ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        SyslogIdentifier = "install-microvm-template-${name}";
+      };
+      script = ''
+        ln -sTf ${runner} ${templateDir name}/current
+        chown -h ${user}:${group} ${templateDir name}/current
+
+        for marker in ${stateDir}/*/template; do
+          [ -f "$marker" ] || continue
+          [ "$(cat "$marker")" = ${lib.escapeShellArg name} ] || continue
+          dir=$(dirname "$marker")
+          instance=$(basename "$dir")
+
+          ln -sTf ${runner} "$dir/current"
+          chown -h ${user}:${group} "$dir/current"
+
+          if [ -L "$dir/booted" ]; then
+            ${lib.optionalString templateConfig.restartIfChanged ''
+              if [ "$(readlink "$dir/booted")" != ${runner} ]; then
+                ${systemctl} restart --no-block "microvm@$instance.service"
+              fi
+            ''}
+            :
+          else
+            ${lib.optionalString templateConfig.autostart ''
+              ${systemctl} start --no-block "microvm@$instance.service"
+            ''}
+            :
+          fi
+        done
+      '';
+    }
+  ) config.microvm.templates;
 in
 {
   imports = [ ./options.nix ];
@@ -34,7 +92,7 @@ in
       "vhost_net"
     ];
 
-    systemd.tmpfiles.settings."10-microvm" =
+    systemd.tmpfiles.settings."10-microvm" = templateDirs //
       builtins.foldl'
         (
           result: name:
@@ -100,7 +158,7 @@ in
       value = "infinity";
     } ];
 
-    systemd.services = builtins.foldl' (result: name: result // (
+    systemd.services = templateServices // builtins.foldl' (result: name: result // (
       let
         microvmConfig = config.microvm.vms.${name};
         inherit (microvmConfig) flake updateFlake;
