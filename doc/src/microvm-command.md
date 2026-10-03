@@ -33,6 +33,38 @@ microvm.autostart = [
 ];
 ```
 
+## Create an instance of a template
+
+Templates declared in `microvm.templates` on the host can be
+instantiated any number of times:
+
+```bash
+microvm -c alice -t workstation -m 4096 -v 2
+```
+
+| Flag | Meaning |
+|---|---|
+| `-t <template>` | Template to instantiate |
+| `-m <MB>` | Memory, overriding the template's `microvm.mem` |
+| `-v <n>` | vCPUs, overriding the template's `microvm.vcpu` |
+
+The instance directory `/var/lib/microvms/<name>/` contains:
+
+- `template`: the template name
+- `current`: the template's runner
+- `instance/`: an empty directory for per-instance files
+- `instance.env`: values read by the runner at launch
+
+| Key | Value |
+|---|---|
+| `MICROVM_HOSTNAME` | the instance name |
+| `MICROVM_TAP_0` | `mvm-` followed by 8 hex digits derived from the name |
+| `MICROVM_MAC_0` | `02:` followed by 5 bytes derived from the name |
+| `MICROVM_MEM` | set by `-m` |
+| `MICROVM_VCPU` | set by `-v` |
+
+`microvm -u <name>` relinks `current` to the template's runner.
+
 ## Update a MicroVM
 
 *Updating* does not refresh your packages but simply rebuilds the

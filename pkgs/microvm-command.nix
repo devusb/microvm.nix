@@ -1,4 +1,5 @@
 { lib
+, coreutils
 , git
 , jq
 , nix
@@ -23,15 +24,18 @@ writeShellScriptBin "microvm" ''
   set -e
 
   PATH=${lib.makeBinPath [
-    git jq nix openssh
+    coreutils git jq nix openssh
   ]}:$PATH
   STATE_DIR=${stateDir}
   ACTION=help
   FLAKE=git+file:///etc/nixos
   RESTART=n
+  TEMPLATE=
+  MEM=
+  VCPU=
 
   OPTERR=1
-  while getopts ":c:C:f:uRr:s:l" arg; do
+  while getopts ":c:C:f:t:m:v:uRr:s:l" arg; do
     case $arg in
       c)
         ACTION=create
@@ -61,6 +65,18 @@ writeShellScriptBin "microvm" ''
         FLAKE=$OPTARG
         ;;
 
+      t)
+        TEMPLATE=$OPTARG
+        ;;
+
+      m)
+        MEM=$OPTARG
+        ;;
+
+      v)
+        VCPU=$OPTARG
+        ;;
+
       R)
         RESTART=y
         ;;
@@ -80,6 +96,16 @@ writeShellScriptBin "microvm" ''
     if [ -e toplevel ]; then
       echo -e "${colored "red" "This MicroVM is managed fully declaratively and cannot be updated manually!"}"
       return 1
+    fi
+
+    if [ -e template ]; then
+      TEMPLATE_CURRENT="$STATE_DIR/.templates/$(cat template)/current"
+      if [ ! -L "$TEMPLATE_CURRENT" ]; then
+        echo -e "${colored "red" "Template $(cat template) is not installed on this host."}"
+        return 1
+      fi
+      ln -sTf "$(readlink "$TEMPLATE_CURRENT")" current
+      return 0
     fi
 
     FLAKE=$(cat flake)
@@ -110,8 +136,24 @@ writeShellScriptBin "microvm" ''
     create)
       TEMP=$(mktemp -d)
       pushd "$TEMP" > /dev/null
-      echo -n "$FLAKE" > flake
-      build "$NAME"
+      if [ -n "$TEMPLATE" ]; then
+        echo "$TEMPLATE" > template
+        build "$NAME"
+        HASH=$(echo -n "$NAME" | sha256sum)
+        {
+          echo "MICROVM_HOSTNAME=$NAME"
+          echo "MICROVM_TAP_0=mvm-''${HASH:0:8}"
+          echo "MICROVM_MAC_0=02:''${HASH:0:2}:''${HASH:2:2}:''${HASH:4:2}:''${HASH:6:2}:''${HASH:8:2}"
+          [ -n "$MEM" ] && echo "MICROVM_MEM=$MEM"
+          [ -n "$VCPU" ] && echo "MICROVM_VCPU=$VCPU"
+          true
+        } > instance.env
+        mkdir instance
+        chmod 0775 instance
+      else
+        echo -n "$FLAKE" > flake
+        build "$NAME"
+      fi
 
       popd > /dev/null
       if [ -e "$DIR" ]; then
@@ -174,7 +216,11 @@ writeShellScriptBin "microvm" ''
           CURRENT_SYSTEM=$(readlink "$DIR/current/share/microvm/system")
           CURRENT=''${CURRENT_SYSTEM#*-}
 
-          if [ -e "$DIR/toplevel" ]; then
+          TEMPLATE_INFO=
+          if [ -e "$DIR/template" ]; then
+            TEMPLATE_INFO="template $(cat "$DIR/template") "
+            NEW_SYSTEM=$(readlink "$STATE_DIR/.templates/$(cat "$DIR/template")/current/share/microvm/system" || echo error)
+          elif [ -e "$DIR/toplevel" ]; then
             # Should always equal current system
             NEW_SYSTEM=$(readlink "$DIR/toplevel")
           else
@@ -190,7 +236,7 @@ writeShellScriptBin "microvm" ''
           else
             echo -n -e "${colors.boldRed}"
           fi
-          echo -n -e "''${NAME}${colors.normal}: "
+          echo -n -e "''${NAME}${colors.normal}: ''${TEMPLATE_INFO}"
           if [ "$CURRENT_SYSTEM" != "$NEW_SYSTEM" ] ; then
             echo -e "${colored "red" "outdated"}(${colored "red" "$CURRENT"}), rebuild(${colored "green" "$NEW"}) and reboot: ${colored "boldCyan" "microvm -Ru $NAME"}"
           elif [ -L "$DIR/booted" ]; then

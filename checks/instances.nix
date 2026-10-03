@@ -57,6 +57,21 @@
         new = host.succeed("readlink /var/lib/microvms/.templates/tmpl/current").strip()
         assert old != new, "template runner did not change"
         assert host.succeed("readlink /var/lib/microvms/pre/current").strip() == new
+
+        host.succeed("microvm -c inst1 -t tmpl")
+        host.succeed("test -f /var/lib/microvms/inst1/template && grep -qx tmpl /var/lib/microvms/inst1/template")
+        host.succeed("grep -q '^MICROVM_HOSTNAME=inst1$' /var/lib/microvms/inst1/instance.env")
+        host.succeed("grep -Eq '^MICROVM_TAP_0=mvm-[0-9a-f]{8}$' /var/lib/microvms/inst1/instance.env")
+        host.succeed("grep -Eq '^MICROVM_MAC_0=02(:[0-9a-f]{2}){5}$' /var/lib/microvms/inst1/instance.env")
+        host.succeed("test -d /var/lib/microvms/inst1/instance")
+        host.succeed("microvm -c inst2 -t tmpl -m 768 -v 2")
+        host.succeed("grep -q '^MICROVM_MEM=768$' /var/lib/microvms/inst2/instance.env")
+        host.succeed("grep -q '^MICROVM_VCPU=2$' /var/lib/microvms/inst2/instance.env")
+        tap1 = host.succeed("grep MICROVM_TAP_0 /var/lib/microvms/inst1/instance.env")
+        tap2 = host.succeed("grep MICROVM_TAP_0 /var/lib/microvms/inst2/instance.env")
+        assert tap1 != tap2
+        host.succeed("microvm -l | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q 'inst1: template tmpl'")
+        host.fail("microvm -c inst1 -t tmpl")
       '';
 
       meta.timeout = 1800;
