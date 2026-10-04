@@ -27,6 +27,7 @@ in
       source = "instance";
       inherit (cfg) mountPoint;
       socket = "instance.sock";
+      readOnly = true;
     } ];
 
     systemd.services.microvm-instance-hostname = {

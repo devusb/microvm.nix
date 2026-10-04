@@ -169,6 +169,7 @@ in
     wait_ssh("inst2")
     assert ssh("inst1", "hostname").strip() == "inst1"
     ssh("inst1", "findmnt /run/microvm/instance")
+    host.fail(f"sshpass -p test ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{guest_ip('inst1')} touch /run/microvm/instance/x")
     ssh("inst1", "findmnt -n -o SOURCE /home | grep -q /dev/vd")
     assert ssh("inst1", "cat /etc/machine-id") != ssh("inst2", "cat /etc/machine-id"), "instances share a machine-id"
     assert guest_ip("inst1") != guest_ip("inst2"), "instances share a DHCP lease"
