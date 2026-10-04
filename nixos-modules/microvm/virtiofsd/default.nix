@@ -37,6 +37,7 @@ in
           map ({ tag, socket, source, readOnly, cache, posixAcl, extraArgs, ... }: {
             name = "program:virtiofsd-${tag}";
             value = {
+              autorestart = true;
               stderr_syslog = true;
               stdout_syslog = true;
               command = pkgs.writeShellScript "virtiofsd-${tag}" ''
