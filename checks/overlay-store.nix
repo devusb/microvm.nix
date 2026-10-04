@@ -27,6 +27,7 @@
         nix.settings.experimental-features = [ "nix-command" ];
         environment.systemPackages = [ pkgs.sshpass ];
         networking.firewall.trustedInterfaces = [ "vmbr0" ];
+        networking.useNetworkd = true;
         systemd.network = {
           enable = true;
           netdevs."10-vmbr0".netdevConfig = {
@@ -65,6 +66,7 @@
             vcpu = 1;
             mem = 1024;
             socket = "control.socket";
+            vsock.cid = 3;
             interfaces = [
               {
                 type = "tap";
