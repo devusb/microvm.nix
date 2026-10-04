@@ -29,6 +29,7 @@ let
 
           environment.systemPackages = [ pkgs.sshpass ];
           networking.firewall.trustedInterfaces = [ "vmbr0" ];
+          networking.useNetworkd = true;
           systemd.network = {
             enable = true;
             netdevs."10-vmbr0".netdevConfig = {
@@ -61,6 +62,7 @@ let
               vcpu = 2;
               mem = 512;
               socket = "control.socket";
+              vsock.cid = 3;
               instance.enable = true;
               interfaces = [
                 {
