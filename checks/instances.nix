@@ -174,6 +174,7 @@ in
     host.fail(f"sshpass -p test ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{guest_ip('inst1')} touch /run/microvm/instance/x")
     ssh("inst1", "findmnt -n -o SOURCE /home | grep -q /dev/vd")
     assert ssh("inst1", "cat /etc/machine-id") != ssh("inst2", "cat /etc/machine-id"), "instances share a machine-id"
+    ssh("inst1", "! systemctl is-failed -q systemd-machine-id-commit.service")
     assert guest_ip("inst1") != guest_ip("inst2"), "instances share a DHCP lease"
 
     create("inst3", "-v 1")

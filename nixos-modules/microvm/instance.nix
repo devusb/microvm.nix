@@ -30,6 +30,8 @@ in
       readOnly = true;
     } ];
 
+    environment.etc."machine-id".enable = false;
+
     systemd.services.microvm-instance-hostname = {
       description = "Set hostname from the MicroVM instance directory";
       wantedBy = [ "sysinit.target" ];
