@@ -163,6 +163,15 @@
             ssh(f"test -e {hostonly}")
             ssh(f"nix path-info {built}")
             ssh("nix-store --verify")
+
+        with subtest("the guest store works after host boot cleanup of temproots"):
+            host.succeed("systemctl stop microvm@ov.service")
+            host.succeed("systemd-tmpfiles --boot --remove --create /etc/tmpfiles.d/00-nixos.conf /etc/tmpfiles.d/10-microvm.conf")
+            host.succeed("test -d /nix/var/nix/temproots")
+            host.succeed("rm -f /var/lib/dnsmasq/dnsmasq.leases && systemctl restart dnsmasq")
+            host.succeed("systemctl start microvm@ov.service")
+            wait_guest()
+            ssh("nix-store --verify")
       '';
 
       meta.timeout = 1200;

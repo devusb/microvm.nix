@@ -13,6 +13,23 @@ let
   group = "kvm";
   templateDir = name: "${stateDir}/.templates/${name}";
 
+  vmGuestConfig = name:
+    let
+      microvmConfig = config.microvm.vms.${name};
+      inherit (microvmConfig) flake;
+    in
+    if flake != null then
+      flake.nixosConfigurations.${name}.config
+    else if microvmConfig.evaluatedConfig != null then
+      microvmConfig.evaluatedConfig.config
+    else
+      microvmConfig.config.config;
+
+  overlayStoreGuests = builtins.any (guestConfig: guestConfig.microvm.overlayStore.enable) (
+    map vmGuestConfig (builtins.attrNames config.microvm.vms)
+    ++ map (templateConfig: templateConfig.config.config) (builtins.attrValues config.microvm.templates)
+  );
+
   templateDirs = lib.optionalAttrs (config.microvm.templates != { }) {
     "${stateDir}/.templates".d = {
       inherit user group;
@@ -93,22 +110,20 @@ in
     ];
 
     systemd.tmpfiles.settings."10-microvm" = templateDirs //
+      lib.optionalAttrs overlayStoreGuests {
+        "/nix/var/nix/temproots".d = {
+          user = "root";
+          group = "root";
+          mode = "0755";
+        };
+      } //
       builtins.foldl'
         (
           result: name:
           result
           // (
             let
-              microvmConfig = config.microvm.vms.${name};
-              inherit (microvmConfig) flake;
-              isFlake = flake != null;
-              guestConfig =
-                if isFlake then
-                  flake.nixosConfigurations.${name}.config
-                else if microvmConfig.evaluatedConfig != null then
-                  microvmConfig.evaluatedConfig.config
-                else
-                  microvmConfig.config.config;
+              guestConfig = vmGuestConfig name;
             in
             builtins.foldl' (
               result: share:
