@@ -172,6 +172,16 @@
             host.succeed("systemctl start microvm@ov.service")
             wait_guest()
             ssh("nix-store --verify")
+
+        with subtest("deleting a guest path the host also has frees its space"):
+            dup = ssh("head -c 50000000 /dev/zero > /root/dup && nix store add-file /root/dup").strip()
+            host.succeed("head -c 50000000 /dev/zero > /tmp/dup && nix store add-file /tmp/dup")
+            ssh(f"cat {dup} > /dev/null")
+            used = int(ssh("df -m --output=used /nix/.rw-store | tail -1"))
+            ssh(f"nix-store --delete {dup}")
+            assert int(ssh("df -m --output=used /nix/.rw-store | tail -1")) < used - 40, "upper copy still held"
+            ssh(f"cmp {dup} /root/dup")
+            ssh("findmnt -n -o OPTIONS -R /nix/store | tail -1 | grep -q ^ro,")
       '';
 
       meta.timeout = 1200;

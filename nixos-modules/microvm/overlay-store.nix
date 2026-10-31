@@ -6,8 +6,8 @@ let
   roVar = "/nix/.ro-var";
   rwStore = "/nix/.rw-store";
 
-  remountHook = pkgs.writeShellScript "remount-nix-store" ''
-    ${lib.getExe' pkgs.util-linux "mount"} -o remount /nix/store
+  remountHook = pkgs.writeShellScript "drop-nix-store-caches" ''
+    echo 2 > /proc/sys/vm/drop_caches
   '';
 
   lowerStore = "local%3A//%3Freal%3D${roStore}%26state%3D${roVar}/nix%26read-only%3Dtrue";
